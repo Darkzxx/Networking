@@ -127,56 +127,6 @@ int arp_request(char *if_name, char *ip_addr){
 	return sockfd;
 }
 
-/*
-void recv_message(char *if_name){
-	int sockfd, byteRecv = -1, n;
-	char buf[BUF_SIZ];
-	struct ifreq if_mac;
-	struct ether_header *eh = (struct ether_header *) buf;
-	struct sockaddr_ll sk_addr;
-	int sk_addr_size = sizeof(struct sockaddr_ll);
-
-	// Open RAW socket to listen for ether type
-	if ((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0){
-		perror("listener socket failed\n");
-		return;
-	}
-
-	// Get index of MAC address to receive on
-	memset(&if_mac, 0, sizeof(struct ifreq));
-	strncpy(if_mac.ifr_name, if_name, IFNAMSIZ-1);
-	if (ioctl(sockfd, SIOCGIFHWADDR, &if_mac) < 0)
-		perror("SIOCGIFHWADDR\n");
-
-	// wait til receive
-	while(byteRecv < 0){
-		printf("listening...\n");
-		byteRecv = recvfrom(sockfd, buf, BUF_SIZ, 0, (struct sockaddr*)&sk_addr,
-					&sk_addr_size);
-		for(n=0; n<6; n++){
-			if (eh->ether_dhost[n] != ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[n])
-				byteRecv = -1;
-		}
-
-	}
-	// display received
-	printf("receive %d bytes\n", byteRecv);
-
-	printf("mac_addr = ");
-	for(n=0; n<5; n++)
-		printf("%hhx:", eh->ether_shost[n]);
-	printf("%hhx\n", eh->ether_shost[n]);
-
-	printf("type = 0x%04x\n", ntohs(eh->ether_type));
-
-	n = sizeof(struct ether_header);
-	printf("data = %s\n", &(buf[n]));
-	
-	close(sockfd);
-	return;
-}
-*/
-
 int arp_receive(char *if_name, int sockfd){
 	int byteRecv = -1, n;
 	size_t eh_size = sizeof(struct ether_header);
