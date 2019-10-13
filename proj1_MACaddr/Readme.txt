@@ -1,6 +1,8 @@
 Instruction on building and compiling
 --------------------------------------
 
+*make sure mininet and xterm are installed on your linux
+
 1. download 455_proj2.c file into your linux
 2. command: gcc 455_proj2.c
 3. command: sudo mn
