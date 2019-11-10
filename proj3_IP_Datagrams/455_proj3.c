@@ -164,8 +164,8 @@ void printIPpacket(int byteRecv, struct ether_header *eh, struct ip *iph, char *
 	printf("IP version: %d\n", iph->ip_v);
 }
 
-// checksum for ip datagram
-int16_t ip_checksum(void * vdata, size_t length){
+// checksum
+int16_t checksum(void * vdata, size_t length){
 	char *data = (char *)vdata;
 	uint16_t word;
 	uint32_t acc = 0xffff;
@@ -234,7 +234,7 @@ struct ip *build_ip_header(struct in_addr ipSrc, struct in_addr ipDest){
 	iph->ip_id = htons(40012);		// id of this packet
 	iph->ip_off = htons(0x4000);	// dont fragment flag
 	iph->ip_ttl = 64;	// ip  time to live
-	iph->ip_p = 253;	// ip protocol for test (normally 17 for UDP, 6 for TCP)
+	iph->ip_p = 253;		// ip protocol for ICMP (17 for UDP, 6 for TCP)
 	iph->ip_sum = 0;	// ip checksum initialize with 0
 
 	memcpy(&(iph->ip_src), &ipSrc, sizeof(struct in_addr));	// get src ip
@@ -242,7 +242,6 @@ struct ip *build_ip_header(struct in_addr ipSrc, struct in_addr ipDest){
 
 	return iph;
 }
-
 
 void send_arp_request(int sockfd, char *if_name, unsigned int src_addr, struct in_addr dest_addr, uint8_t destMac[]){
 	int sendLen, byteSent;
@@ -327,7 +326,8 @@ void recv_arp_reply(int sockfd, char *if_name, uint8_t getdestMac[]){
 
 // send ip_data frame after ARP for destination mac address
 void send_message(char *if_name, char *destIP, char* routerIP, char* data){
-	int sockfd, bit_num, sendLen, byteSent;
+	int sockfd, sockip, bit_num, sendLen, byteSent;
+	int buffer_icmp_begin, icmp_cksum_size;
 	char sendbuf[BUF_SIZ];
 	unsigned int src_addr, netmask;
 	uint16_t datalen = strlen(data);
@@ -354,6 +354,10 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	if ((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
 		perror("socket() failed\n");
 	
+	// Open RAW socket to send on
+	if ((sockip = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0)
+		perror("socket() failed\n");
+	
 	// get netmask
 	netmask = get_netmask(if_name, sockfd);
 	// get src ip
@@ -374,6 +378,8 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	// wait for arp reply
 	recv_arp_reply(sockfd, if_name, destMac);
 
+	//sockfd = sockip;
+
 	// get socket interface for send
 	if_idx = get_interface(if_name, sockfd);
 	// get source mac address
@@ -385,27 +391,28 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	iph = build_ip_header(*(struct in_addr *)&src_addr, dest_addr);
 
 	// ip header total length
-	iph->ip_len = htons(sizeof(struct ip) + datalen);
+	iph->ip_len = htons(sizeof(struct ip) +  datalen);
 
 	// combine all headers and data to one frame
-	memcpy(sendbuf, eh, sizeof(struct ether_header));
-	sendLen = sizeof(struct ether_header);
+	//memcpy(sendbuf, eh, sizeof(struct ether_header));
+	//sendLen = sizeof(struct ether_header);
 	memcpy(&(sendbuf[sendLen]), iph, sizeof(struct ip));
-	sendLen += sizeof(struct ip);
+	sendLen = sizeof(struct ip);
 	memcpy(&(sendbuf[sendLen]), data, datalen);
 	sendLen += datalen;
 
 	// get checksum
-	iph->ip_sum = ip_checksum(sendbuf, sendLen);
+	iph->ip_sum = checksum(sendbuf, sendLen);
 
 	// add the new ip header with checksum into frame
-	memcpy(&(sendbuf[sizeof(struct ether_header)]), iph, sizeof(struct ip));
+	//memcpy(&(sendbuf[sizeof(struct ether_header)]), iph, sizeof(struct ip));
+	memcpy(sendbuf, iph, sizeof(struct ip));
 
 	// send
 	memset(&sk_addr, 0, sk_addr_size);
 	sk_addr.sll_ifindex = if_idx.ifr_ifindex;
 	sk_addr.sll_halen = ETH_ALEN;
-	byteSent = sendto(sockfd, sendbuf, sendLen, 0, (struct sockaddr*)&sk_addr, 
+	byteSent = sendto(sockip, sendbuf, sendLen, 0, (struct sockaddr*)&sk_addr, 
 				sizeof(struct sockaddr_ll));
 	
 	if (byteSent < 0)
@@ -448,16 +455,19 @@ void recv_message(char *if_name){
 			byteRecv = -1;
 			continue;
 		}
+		// get ether header 
+		memcpy(eh, buf, eh_size);
 		// check if ether type is IP type
+		printf("ether_type = 0x%04x\n", ntohs(eh->ether_type));
 		if (eh->ether_type != htons(ETH_P_IP))
 			byteRecv = -1;
 	}
 	
-	// get ether header 
-	memcpy(eh, buf, eh_size);
 	// get data
 	n = eh_size + sizeof(struct ip);
 	strcpy(data, &(buf[n]));
+
+	printf("data = %s\n", data);
 	
 
 
