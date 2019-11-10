@@ -378,8 +378,6 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	// wait for arp reply
 	recv_arp_reply(sockfd, if_name, destMac);
 
-	//sockfd = sockip;
-
 	// get socket interface for send
 	if_idx = get_interface(if_name, sockfd);
 	// get source mac address
@@ -468,8 +466,6 @@ void recv_message(char *if_name){
 	strcpy(data, &(buf[n]));
 
 	printf("data = %s\n", data);
-	
-
 
 	close(sockfd);
 }
