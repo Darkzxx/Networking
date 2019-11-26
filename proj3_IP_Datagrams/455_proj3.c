@@ -394,7 +394,7 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	// combine all headers and data to one frame
 	//memcpy(sendbuf, eh, sizeof(struct ether_header));
 	//sendLen = sizeof(struct ether_header);
-	memcpy(&(sendbuf[sendLen]), iph, sizeof(struct ip));
+	memcpy(sendbuf, iph, sizeof(struct ip));
 	sendLen = sizeof(struct ip);
 	memcpy(&(sendbuf[sendLen]), data, datalen);
 	sendLen += datalen;
