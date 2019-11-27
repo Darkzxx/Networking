@@ -377,14 +377,14 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	
 	// wait for arp reply
 	recv_arp_reply(sockfd, if_name, destMac);
-
+	
 	// get socket interface for send
 	if_idx = get_interface(if_name, sockfd);
 	// get source mac address
 	if_mac = get_mac(if_name, sockfd);	
 
 	// build ether header
-	eh = build_ether_header(if_mac, destMac, ETH_P_IP);
+	//eh = build_ether_header(if_mac, destMac, ETH_P_IP);
 	// build ip header
 	iph = build_ip_header(*(struct in_addr *)&src_addr, dest_addr);
 
