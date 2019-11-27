@@ -326,8 +326,8 @@ void recv_arp_reply(int sockfd, char *if_name, uint8_t getdestMac[]){
 
 // send ip_data frame after ARP for destination mac address
 void send_message(char *if_name, char *destIP, char* routerIP, char* data){
-	int sockfd, sockip, bit_num, sendLen, byteSent;
-	int buffer_icmp_begin, icmp_cksum_size;
+	int sock, sockfd, sockip, bit_num, sendLen, byteSent;
+	int samenet = 1, ip_begin = 0;
 	char sendbuf[BUF_SIZ];
 	unsigned int src_addr, netmask;
 	uint16_t datalen = strlen(data);
@@ -354,10 +354,6 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	if ((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)
 		perror("socket() failed\n");
 	
-	// Open RAW socket to send on
-	if ((sockip = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0)
-		perror("socket() failed\n");
-	
 	// get netmask
 	netmask = get_netmask(if_name, sockfd);
 	// get src ip
@@ -371,8 +367,13 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 		send_arp_request(sockfd, if_name, src_addr, dest_addr, destMac);
 	}
 	else{
+		// Open RAW socket to send to router
+		if ((sockip = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0)
+			perror("socket() failed\n");
+
 		// different networks, ARP to router
 		send_arp_request(sockfd, if_name, src_addr, rout_addr, destMac);
+		samenet = 0;
 	}
 	
 	// wait for arp reply
@@ -383,8 +384,10 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	// get source mac address
 	if_mac = get_mac(if_name, sockfd);	
 
-	// build ether header
-	//eh = build_ether_header(if_mac, destMac, ETH_P_IP);
+	if (samenet){
+		// build ether header
+		eh = build_ether_header(if_mac, destMac, ETH_P_IP);
+	}
 	// build ip header
 	iph = build_ip_header(*(struct in_addr *)&src_addr, dest_addr);
 
@@ -392,25 +395,33 @@ void send_message(char *if_name, char *destIP, char* routerIP, char* data){
 	iph->ip_len = htons(sizeof(struct ip) +  datalen);
 
 	// combine all headers and data to one frame
-	//memcpy(sendbuf, eh, sizeof(struct ether_header));
-	//sendLen = sizeof(struct ether_header);
-	memcpy(sendbuf, iph, sizeof(struct ip));
-	sendLen = sizeof(struct ip);
+	sendLen = 0;
+	if (samenet){
+		memcpy(sendbuf, eh, sizeof(struct ether_header));
+		sendLen = sizeof(struct ether_header);
+	}
+	ip_begin = sendLen;
+	memcpy(&(sendbuf[sendLen]), iph, sizeof(struct ip));
+	sendLen += sizeof(struct ip);
 	memcpy(&(sendbuf[sendLen]), data, datalen);
 	sendLen += datalen;
 
 	// get checksum
-	iph->ip_sum = checksum(sendbuf, sendLen);
+	iph->ip_sum = checksum(&(sendbuf[ip_begin]), sendLen - ip_begin);
 
 	// add the new ip header with checksum into frame
-	//memcpy(&(sendbuf[sizeof(struct ether_header)]), iph, sizeof(struct ip));
-	memcpy(sendbuf, iph, sizeof(struct ip));
+	memcpy(&(sendbuf[ip_begin]), iph, sizeof(struct ip));
 
 	// send
 	memset(&sk_addr, 0, sk_addr_size);
 	sk_addr.sll_ifindex = if_idx.ifr_ifindex;
 	sk_addr.sll_halen = ETH_ALEN;
-	byteSent = sendto(sockip, sendbuf, sendLen, 0, (struct sockaddr*)&sk_addr, 
+
+	sock = sockfd;
+	if(!samenet)
+		sock = sockip;
+
+	byteSent = sendto(sock, sendbuf, sendLen, 0, (struct sockaddr*)&sk_addr, 
 				sizeof(struct sockaddr_ll));
 	
 	if (byteSent < 0)
